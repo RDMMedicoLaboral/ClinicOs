@@ -243,6 +243,20 @@ export async function initDb() {
       presentation TEXT NOT NULL
     );
 
+    -- Medicamentos que una institución/clínica agrega para SU propio uso
+    -- (por ejemplo marcas locales que esa clínica maneja), además del
+    -- catálogo general de arriba. Los ven TODOS los médicos de esa
+    -- institución (compartido entre colegas), pero ninguna otra institución.
+    CREATE TABLE IF NOT EXISTS institution_medications (
+      id SERIAL PRIMARY KEY,
+      institution_id INTEGER NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+      generic_name TEXT NOT NULL,
+      commercial_names TEXT,
+      presentation TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (${NOW_TEXT})
+    );
+    CREATE INDEX IF NOT EXISTS idx_institution_medications_institution ON institution_medications(institution_id);
+
     CREATE TABLE IF NOT EXISTS doctor_profile (
       doctor_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       full_name TEXT,

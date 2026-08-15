@@ -40,16 +40,80 @@ textarea {
 
 /* ---------- Layout ----------
    A diferencia del panel de dos columnas a sangre de la app anterior,
-   aquí la barra lateral y el contenido son dos tarjetas flotantes sobre
-   un fondo crema, con espacio entre ellas — una disposición más suave
-   y "de escritorio de consultorio" que de panel administrativo. */
+   aquí hay una barra superior con la identidad de la institución y el
+   usuario, y debajo el contenido principal a la izquierda con el listado
+   de pacientes como panel secundario a la DERECHA — el orden invertido
+   respecto al patrón típico de "lista primero" de la app anterior. */
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 288px minmax(0, 1fr);
-  gap: 20px;
   min-height: 100vh;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.top-header {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.top-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.more-menu {
+  position: relative;
+}
+
+.more-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  overflow: hidden;
+  z-index: 20;
+}
+
+.more-menu-panel button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 10px 16px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.more-menu-panel button:hover {
+  background: var(--accent-soft);
+}
+
+.more-menu-panel button + button {
+  border-top: 1px solid var(--line);
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -58,7 +122,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-soft);
-  padding: 24px 20px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -69,10 +133,8 @@ textarea {
 
 .brand {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 24px;
 }
 
 .brand-clinic {
@@ -84,11 +146,11 @@ textarea {
 
 .brand-app {
   display: flex;
-  flex-direction: row-reverse;
   align-items: center;
   gap: 8px;
-  text-align: right;
   flex-shrink: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
 }
 
 .brand-mark {

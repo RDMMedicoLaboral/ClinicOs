@@ -7,6 +7,7 @@ import PatientRecord from "./components/PatientRecord.jsx";
 import DoctorProfileModal from "./components/DoctorProfileModal.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import UsersModal from "./components/UsersModal.jsx";
+import InstitutionMedicationsModal from "./components/InstitutionMedicationsModal.jsx";
 import ChangePasswordModal from "./components/ChangePasswordModal.jsx";
 import ReminderSettingsModal from "./components/ReminderSettingsModal.jsx";
 import NotificationSettingsModal from "./components/NotificationSettingsModal.jsx";
@@ -68,6 +69,8 @@ export default function App() {
   const [record, setRecord] = useState(null); // { patientId, appointmentId } | null
   const [showDoctorProfile, setShowDoctorProfile] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
+  const [showMedications, setShowMedications] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
@@ -142,7 +145,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <header className="top-header">
         <div className="brand">
           <div className="brand-clinic">
             <img src={clinicLogo || "/assets/logo.png"} alt={user.institution_name || "Institución"} className="brand-mark" />
@@ -160,50 +163,59 @@ export default function App() {
           </div>
         </div>
 
-        <button className="btn-primary full" onClick={() => setShowPatientModal(true)}>
-          + Nuevo paciente
-        </button>
-
-        <input
-          className="search-input"
-          placeholder="Buscar paciente…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-
-        <ul className="patient-list">
-          {filteredPatients.map((p) => (
-            <li
-              key={p.id}
-              className={isMedico ? "clickable" : ""}
-              onClick={() => isMedico && setRecord({ patientId: p.id, appointmentId: null })}
-            >
-              <span>
-                {p.first_name} {p.last_name}
-              </span>
-              {p.allergies && <span className="allergy-dot" title={`Alergia: ${p.allergies}`} />}
-            </li>
-          ))}
-          {filteredPatients.length === 0 && <li className="hint">Sin resultados.</li>}
-        </ul>
-
-        <div className="sidebar-footer">
+        <div className="top-header-actions">
           {isMedico && (
-            <>
-              <button className="btn-ghost full" onClick={() => setShowDoctorProfile(true)}>
-                Perfil del médico
+            <div className="more-menu">
+              <button className="btn-ghost" onClick={() => setShowMoreMenu((v) => !v)}>
+                Más opciones ▾
               </button>
-              <button className="btn-ghost full" onClick={() => setShowUsers(true)}>
-                Gestionar usuarios
-              </button>
-              <button className="btn-ghost full" onClick={() => setShowReminders(true)}>
-                Recordatorios
-              </button>
-              <button className="btn-ghost full" onClick={() => setShowNotificationSettings(true)}>
-                Envío automático
-              </button>
-            </>
+              {showMoreMenu && (
+                <div className="more-menu-panel" onMouseLeave={() => setShowMoreMenu(false)}>
+                  <button
+                    onClick={() => {
+                      setShowDoctorProfile(true);
+                      setShowMoreMenu(false);
+                    }}
+                  >
+                    Perfil del médico
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUsers(true);
+                      setShowMoreMenu(false);
+                    }}
+                  >
+                    Gestionar usuarios
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMedications(true);
+                      setShowMoreMenu(false);
+                    }}
+                  >
+                    Medicamentos de la clínica
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowReminders(true);
+                      setShowMoreMenu(false);
+                    }}
+                  >
+                    Recordatorios
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNotificationSettings(true);
+                      setShowMoreMenu(false);
+                    }}
+                  >
+                    Envío automático
+                  </button>
+                </div>
+              )}
+            </div>
           )}
+
           <div className="user-badge">
             <div>
               <strong>{user.full_name}</strong>
@@ -221,53 +233,84 @@ export default function App() {
             </div>
           </div>
         </div>
-      </aside>
+      </header>
 
-      <main className="main">
-        {record && isMedico ? (
-          <PatientRecord
-            patientId={record.patientId}
-            appointmentId={record.appointmentId}
-            onOpenDoctorProfile={() => setShowDoctorProfile(true)}
-            onBack={() => {
-              setRecord(null);
-              loadAppointments(date);
-            }}
-          />
-        ) : (
-          <>
-            <header className="agenda-header">
-              <div className="date-nav">
-                <button className="btn-ghost icon" onClick={() => setDate((d) => shiftDate(d, -1))}>
-                  ‹
-                </button>
-                <div className="date-label">
-                  <div className="date-title">{formatHeaderDate(date)}</div>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-                <button className="btn-ghost icon" onClick={() => setDate((d) => shiftDate(d, 1))}>
-                  ›
-                </button>
-                <button className="btn-ghost" onClick={() => setDate(todayISO())}>
-                  Hoy
-                </button>
-              </div>
-              <button className="btn-primary" onClick={() => setShowApptModal(true)}>
-                + Nueva cita
-              </button>
-            </header>
-
-            <AgendaView
-              appointments={appointments}
-              loading={loading}
-              isMedico={isMedico}
-              onChangeStatus={handleStatusChange}
-              onOpenRecord={(patientId, appointmentId) => isMedico && setRecord({ patientId, appointmentId })}
-              onSendReminder={handleSendReminder}
+      <div className="app-body">
+        <main className="main">
+          {record && isMedico ? (
+            <PatientRecord
+              patientId={record.patientId}
+              appointmentId={record.appointmentId}
+              onOpenDoctorProfile={() => setShowDoctorProfile(true)}
+              onBack={() => {
+                setRecord(null);
+                loadAppointments(date);
+              }}
             />
-          </>
-        )}
-      </main>
+          ) : (
+            <>
+              <header className="agenda-header">
+                <div className="date-nav">
+                  <button className="btn-ghost icon" onClick={() => setDate((d) => shiftDate(d, -1))}>
+                    ‹
+                  </button>
+                  <div className="date-label">
+                    <div className="date-title">{formatHeaderDate(date)}</div>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  </div>
+                  <button className="btn-ghost icon" onClick={() => setDate((d) => shiftDate(d, 1))}>
+                    ›
+                  </button>
+                  <button className="btn-ghost" onClick={() => setDate(todayISO())}>
+                    Hoy
+                  </button>
+                </div>
+                <button className="btn-primary" onClick={() => setShowApptModal(true)}>
+                  + Nueva cita
+                </button>
+              </header>
+
+              <AgendaView
+                appointments={appointments}
+                loading={loading}
+                isMedico={isMedico}
+                onChangeStatus={handleStatusChange}
+                onOpenRecord={(patientId, appointmentId) => isMedico && setRecord({ patientId, appointmentId })}
+                onSendReminder={handleSendReminder}
+              />
+            </>
+          )}
+        </main>
+
+        <aside className="sidebar">
+          <button className="btn-primary full" onClick={() => setShowPatientModal(true)}>
+            + Nuevo paciente
+          </button>
+
+          <input
+            className="search-input"
+            placeholder="Buscar paciente…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+
+          <ul className="patient-list">
+            {filteredPatients.map((p) => (
+              <li
+                key={p.id}
+                className={isMedico ? "clickable" : ""}
+                onClick={() => isMedico && setRecord({ patientId: p.id, appointmentId: null })}
+              >
+                <span>
+                  {p.first_name} {p.last_name}
+                </span>
+                {p.allergies && <span className="allergy-dot" title={`Alergia: ${p.allergies}`} />}
+              </li>
+            ))}
+            {filteredPatients.length === 0 && <li className="hint">Sin resultados.</li>}
+          </ul>
+        </aside>
+      </div>
 
       {showPatientModal && (
         <PatientModal
@@ -307,6 +350,7 @@ export default function App() {
       )}
 
       {showUsers && isMedico && <UsersModal onClose={() => setShowUsers(false)} />}
+      {showMedications && isMedico && <InstitutionMedicationsModal onClose={() => setShowMedications(false)} />}
 
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
 

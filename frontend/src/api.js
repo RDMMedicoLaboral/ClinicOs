@@ -76,6 +76,9 @@ export const api = {
   },
   medications: {
     search: (q) => request(`/medications?q=${encodeURIComponent(q)}`),
+    mine: () => request(`/medications/mine`),
+    create: (data) => request(`/medications`, { method: "POST", body: JSON.stringify(data) }),
+    remove: (id) => request(`/medications/${id}`, { method: "DELETE" }),
   },
   doctorProfile: {
     get: () => request(`/doctor-profile`),

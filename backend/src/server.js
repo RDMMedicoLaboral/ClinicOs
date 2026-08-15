@@ -105,7 +105,7 @@ if (fs.existsSync(frontendDist)) {
 // claro en vez de arrancar a medias.
 initDb()
   .then(() => {
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`API de Agenda escuchando en http://localhost:${PORT}`);
     });
 
