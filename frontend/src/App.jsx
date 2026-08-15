@@ -15,8 +15,15 @@ import NotificationSettingsModal from "./components/NotificationSettingsModal.js
 import Footer from "./components/Footer.jsx";
 
 function todayISO() {
+  // OJO: usar toISOString() aquí da la fecha en UTC, no la fecha local.
+  // Entre las 7pm y medianoche hora Ecuador (00:00–05:00 UTC del día
+  // siguiente), eso hacía que "hoy" saltara al día siguiente por error.
+  // getFullYear/getMonth/getDate sí devuelven la fecha LOCAL del navegador.
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function shiftDate(iso, days) {
