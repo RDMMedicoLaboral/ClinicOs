@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>Clínic-Os · Administración</title>
+<style>
+  :root {
+    --bg: #f6efe6; --surface: #fffdf9; --ink: #3a2e26; --ink-soft: #8a7566;
+    --accent: #c2632f; --accent-dark: #8f4620; --accent-soft: #f3e0cd;
+    --accent-2: #6f8c6a; --line: #e7d9c8; --danger: #b3412c;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: 'Nunito', system-ui, sans-serif; padding: 32px 16px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; font-family: 'Lora', serif; font-weight: 600; }
+  h1 .medic { color: var(--ink); }
+  h1 .os { color: var(--accent); }
+  .sub { color: var(--ink-soft); font-size: 0.85rem; margin-bottom: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 8px 24px rgba(58,46,38,0.06); }
+  .card strong { font-family: 'Lora', serif; font-size: 1.02rem; }
+  label { display:block; font-size: 0.8rem; color: var(--ink-soft); margin-top: 12px; margin-bottom: 4px; }
+  input, select { width:100%; padding: 9px 10px; border:1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 0.95rem; font-family: inherit; }
+  button { margin-top: 16px; background: var(--accent); color: #fff; border:none; padding: 10px 18px; border-radius: 999px; cursor:pointer; font-weight:700; font-family: inherit; }
+  button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button.danger { background: var(--danger); }
+  button.small { margin-top: 0; padding: 6px 12px; font-size: 0.78rem; }
+  .msg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; }
+  .msg.ok { background: var(--accent-soft); color: var(--accent-dark); }
+  .msg.error { background: #fbe3da; color: var(--danger); }
+  table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+  th, td { text-align:left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-soft); font-weight:700; }
+  .gate { display:flex; gap:8px; }
+  .gate input { flex:1; }
+  .hidden { display:none !important; }
+  .modal-backdrop { position:fixed; inset:0; background:rgba(58,46,38,0.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+  .pw-card { background: var(--surface); border-radius: 16px; padding: 22px; max-width: 380px; width: 90%; }
+  .pw-card h2 { font-size: 1.05rem; margin: 0 0 6px; font-family: 'Lora', serif; }
+  .pw-card p { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; }
+  .pw-row { display:flex; gap:8px; align-items:center; }
+  .pw-box { flex:1; background: var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; letter-spacing: 0.03em; word-break: break-all; }
+  .pw-copy-btn { background: var(--accent); color:#fff; border:none; border-radius:999px; padding:10px 14px; cursor:pointer; font-weight:700; font-size:0.85rem; white-space:nowrap; margin-top: 0; }
+  .pw-copy-btn.copied { background:#2e7d32; }
+  .pw-close-btn { margin-top:16px; background:transparent; border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:8px 14px; cursor:pointer; font-weight:700; width:100%; }
+  .institution-block { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; }
+  .institution-header { display:flex; justify-content:space-between; align-items:center; gap: 10px; flex-wrap: wrap; }
+  .institution-header .name { font-family: 'Lora', serif; font-weight:600; font-size: 1.02rem; }
+  .institution-meta { font-size: 0.78rem; color: var(--ink-soft); margin-top: 2px; }
+  .doctor-row { display:flex; justify-content:space-between; align-items:center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .doctor-row:first-of-type { border-top: none; }
+  .doctor-actions { display:flex; gap: 6px; }
+  .toggle-add-doctor { margin-top: 10px; }
+  .add-doctor-form { display:none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .add-doctor-form.open { display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><img src="/assets/logo.png" alt="Clínic-Os" style="width:32px;height:32px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;" /><span class="medic">Clínic</span><span class="os">-Os</span> · Administración</h1>
+  <div class="sub">Esta página es solo para ti (el dueño de la plataforma). Aquí das de alta instituciones/clínicas nuevas, y puedes agregarles más de un médico — cada médico tiene su propia cartera de pacientes, aislada de sus colegas dentro de la misma institución.</div>
+
+  <div class="card" id="gateCard">
+    <label for="secret">Clave de administrador</label>
+    <div class="gate">
+      <input id="secret" type="password" placeholder="La misma que pusiste en ADMIN_SECRET" />
+      <button onclick="unlock()">Entrar</button>
+    </div>
+    <div id="gateMsg"></div>
+  </div>
+
+  <div id="mainArea" class="hidden">
+    <div class="card">
+      <strong>Crear institución/clínica nueva</strong>
+      <label for="institutionName">Nombre de la institución/clínica</label>
+      <input id="institutionName" placeholder="Clínica Santa Fe" />
+      <label for="institutionAddress">Dirección</label>
+      <input id="institutionAddress" />
+      <label for="institutionPhone">Teléfono</label>
+      <input id="institutionPhone" />
+
+      <div style="margin-top:18px; border-top:1px dashed var(--line); padding-top: 14px;">
+        <strong style="font-size:0.9rem;">Primer médico de esta institución</strong>
+        <label for="fullName">Nombre completo del médico</label>
+        <input id="fullName" placeholder="Dr. Juan García" autocomplete="off" oninput="onFullNameInput()" />
+        <label for="username">Usuario (para iniciar sesión)</label>
+        <input id="username" placeholder="dr.garcia" autocomplete="off" oninput="onUsernameInput()" />
+        <div class="hint" id="usernameHint" style="font-size:0.75rem; color:var(--ink-soft); margin-top:4px;"></div>
+        <label for="password">Contraseña temporal</label>
+        <input id="password" type="text" placeholder="Mínimo 6 caracteres" autocomplete="off" />
+
+        <details style="margin-top:14px;">
+          <summary style="cursor:pointer; font-size:0.85rem; color:var(--ink-soft);">
+            Datos opcionales del médico (quedan pre-llenados en "Perfil del médico"; él puede editarlos después)
+          </summary>
+          <label for="personalId">C.I. (cédula personal)</label>
+          <input id="personalId" />
+          <label for="license">Cédula profesional / Reg. SENESCYT</label>
+          <input id="license" />
+          <label for="specialty">Especialidad</label>
+          <input id="specialty" placeholder="Medicina General" />
+          <label for="docEmail">Correo electrónico</label>
+          <input id="docEmail" type="email" />
+          <label for="city">Ciudad (lugar de emisión de certificados)</label>
+          <input id="city" placeholder="Manta" />
+        </details>
+
+        <button onclick="createInstitution()">Crear institución</button>
+        <div id="createMsg"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Instituciones existentes</strong>
+      <div id="institutionsList"></div>
+    </div>
+  </div>
+
+  <div id="pwModal" class="modal-backdrop hidden" onclick="if(event.target===this) closePwModal()">
+    <div class="pw-card">
+      <h2>Nueva contraseña temporal</h2>
+      <p id="pwModalUser"></p>
+      <div class="pw-row">
+        <div class="pw-box" id="pwModalValue"></div>
+        <button class="pw-copy-btn" id="pwCopyBtn" onclick="copyPwModal()">Copiar</button>
+      </div>
+      <p style="margin-top:10px;">Esta es la contraseña del <strong>médico/usuario</strong>, no la tuya de administrador. Compártela con él ahora — no se volverá a mostrar.</p>
+      <button class="pw-close-btn" onclick="closePwModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let SECRET = sessionStorage.getItem('clinicos_admin_secret') || '';
+
+  function showMsg(id, text, ok) {
+    const el = document.getElementById(id);
+    el.className = 'msg ' + (ok ? 'ok' : 'error');
+    el.textContent = text;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch('/api/admin' + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SECRET, ...(options.headers || {}) },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(body.error || ('Error ' + res.status));
+      Object.assign(err, body);
+      throw err;
+    }
+    return body;
+  }
+
+  async function unlock() {
+    SECRET = document.getElementById('secret').value.trim();
+    try {
+      await api('/institutions');
+      sessionStorage.setItem('clinicos_admin_secret', SECRET);
+      document.getElementById('gateCard').classList.add('hidden');
+      document.getElementById('mainArea').classList.remove('hidden');
+      loadInstitutions();
+    } catch (err) {
+      showMsg('gateMsg', err.message, false);
+    }
+  }
+
+  async function loadInstitutions() {
+    const rows = await api('/institutions');
+    const el = document.getElementById('institutionsList');
+    if (!rows.length) {
+      el.innerHTML = '<p class="sub" style="margin:10px 0 0;">Todavía no hay instituciones.</p>';
+      return;
+    }
+    el.innerHTML = '';
+    for (const inst of rows) {
+      const block = document.createElement('div');
+      block.className = 'institution-block';
+      block.innerHTML = `
+        <div class="institution-header">
+          <div>
+            <div class="name">${inst.name}</div>
+            <div class="institution-meta">${inst.doctor_count} médico(s) · ${inst.staff_count} secretaria(s)/enfermera(s) · ${inst.patient_count} pacientes</div>
+          </div>
+          <button class="danger small" onclick="deleteInstitution(${inst.id}, '${inst.name.replace(/'/g, "")}')">Eliminar institución</button>
+        </div>
+        <div id="doctors-${inst.id}"></div>
+        <button class="secondary small toggle-add-doctor" onclick="toggleAddDoctor(${inst.id})">+ Agregar médico</button>
+        <div class="add-doctor-form" id="addDoctorForm-${inst.id}">
+          <label>Nombre completo</label>
+          <input id="newDocName-${inst.id}" placeholder="Dra. Ana Torres" />
+          <label>Usuario</label>
+          <input id="newDocUser-${inst.id}" placeholder="dra.torres" />
+          <label>Contraseña temporal</label>
+          <input id="newDocPass-${inst.id}" placeholder="Mínimo 6 caracteres" />
+          <button class="small" onclick="addDoctor(${inst.id})">Crear médico</button>
+          <div id="addDoctorMsg-${inst.id}"></div>
+        </div>
+      `;
+      el.appendChild(block);
+      loadDoctors(inst.id);
+    }
+  }
+
+  async function loadDoctors(institutionId) {
+    const doctors = await api('/institutions/' + institutionId + '/doctors');
+    const el = document.getElementById('doctors-' + institutionId);
+    el.innerHTML = doctors.map(d => `
+      <div class="doctor-row">
+        <div>
+          <strong>${d.full_name}</strong> <code>@${d.username}</code>
+          <div class="institution-meta">${d.staff_count} equipo · ${d.patient_count} pacientes</div>
+        </div>
+        <div class="doctor-actions">
+          <button class="secondary small" onclick="resetDoctorPassword(${institutionId}, ${d.id}, '${d.full_name.replace(/'/g, "")}')">Restablecer clave</button>
+          <button class="danger small" onclick="deleteDoctor(${d.id}, '${d.full_name.replace(/'/g, "")}')">Eliminar</button>
+        </div>
+      </div>
+    `).join('') || '<p class="institution-meta">Sin médicos todavía.</p>';
+  }
+
+  function toggleAddDoctor(institutionId) {
+    document.getElementById('addDoctorForm-' + institutionId).classList.toggle('open');
+  }
+
+  async function addDoctor(institutionId) {
+    const full_name = document.getElementById('newDocName-' + institutionId).value.trim();
+    const username = document.getElementById('newDocUser-' + institutionId).value.trim();
+    const password = document.getElementById('newDocPass-' + institutionId).value.trim();
+    try {
+      const result = await api('/institutions/' + institutionId + '/doctors', {
+        method: 'POST',
+        body: JSON.stringify({ full_name, username, password }),
+      });
+      document.getElementById('newDocName-' + institutionId).value = '';
+      document.getElementById('newDocUser-' + institutionId).value = '';
+      document.getElementById('newDocPass-' + institutionId).value = '';
+      openPwModal(result.username, password);
+      loadDoctors(institutionId);
+      loadInstitutions();
+    } catch (err) {
+      const msgEl = document.getElementById('addDoctorMsg-' + institutionId);
+      msgEl.className = 'msg error';
+      msgEl.textContent = err.message;
+    }
+  }
+
+  async function resetDoctorPassword(institutionId, userId, name) {
+    if (!confirm('¿Generar una contraseña nueva para "' + name + '"? La contraseña actual dejará de funcionar.')) return;
+    try {
+      const result = await api('/institutions/' + institutionId + '/reset-password', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+      openPwModal(result.username, result.password);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function deleteDoctor(userId, name) {
+    if (!confirm('¿Eliminar al médico "' + name + '" y TODOS sus pacientes, citas, recetas y su equipo asignado? Esto no se puede deshacer.')) return;
+    await api('/doctors/' + userId, { method: 'DELETE' });
+    loadInstitutions();
+  }
+
+  async function deleteInstitution(id, name) {
+    if (!confirm('¿Eliminar la institución "' + name + '" y TODOS sus médicos, pacientes, citas y recetas? Esto no se puede deshacer.')) return;
+    await api('/institutions/' + id, { method: 'DELETE' });
+    loadInstitutions();
+  }
+
+  function openPwModal(username, password) {
+    document.getElementById('pwModalUser').textContent = 'Para ' + username + ':';
+    document.getElementById('pwModalValue').textContent = password;
+    document.getElementById('pwCopyBtn').textContent = 'Copiar';
+    document.getElementById('pwCopyBtn').classList.remove('copied');
+    document.getElementById('pwModal').classList.remove('hidden');
+  }
+
+  function closePwModal() {
+    document.getElementById('pwModal').classList.add('hidden');
+  }
+
+  async function copyPwModal() {
+    const password = document.getElementById('pwModalValue').textContent;
+    const btn = document.getElementById('pwCopyBtn');
+    try {
+      await navigator.clipboard.writeText(password);
+      btn.textContent = '¡Copiada!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copiar';
+        btn.classList.remove('copied');
+      }, 2000);
+    } catch (e) {
+      alert('No se pudo copiar automáticamente. Selecciona el texto y cópialo manualmente: ' + password);
+    }
+  }
+
+  let suggestDebounce = null;
+  let lastSuggested = ""; // el último valor que NOSOTROS pusimos en Usuario (para saber si el médico lo tocó después)
+
+  function onFullNameInput() {
+    clearTimeout(suggestDebounce);
+    const fullName = document.getElementById('fullName').value.trim();
+    if (!fullName) return;
+    suggestDebounce = setTimeout(async () => {
+      const usernameField = document.getElementById('username');
+      const current = usernameField.value.trim();
+      if (current && current !== lastSuggested) return;
+      try {
+        const { suggestion } = await api('/suggest-username?desired=' + encodeURIComponent(fullName));
+        const stillOk = !usernameField.value.trim() || usernameField.value.trim() === lastSuggested;
+        if (suggestion && stillOk) {
+          usernameField.value = suggestion;
+          lastSuggested = suggestion;
+        }
+      } catch (e) { console.error('No se pudo sugerir usuario:', e); }
+    }, 300);
+  }
+
+  function onUsernameInput() {
+    document.getElementById('usernameHint').textContent = '';
+  }
+
+  async function createInstitution() {
+    const institution_name = document.getElementById('institutionName').value.trim();
+    const institution_address = document.getElementById('institutionAddress').value.trim();
+    const institution_phone = document.getElementById('institutionPhone').value.trim();
+    const full_name = document.getElementById('fullName').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const personal_id = document.getElementById('personalId').value.trim();
+    const professional_license = document.getElementById('license').value.trim();
+    const specialty = document.getElementById('specialty').value.trim();
+    const email = document.getElementById('docEmail').value.trim();
+    const city = document.getElementById('city').value.trim();
+    try {
+      const result = await api('/institutions', {
+        method: 'POST',
+        body: JSON.stringify({
+          institution_name, institution_address, institution_phone,
+          full_name, username, password,
+          personal_id, professional_license, specialty, email, city,
+        }),
+      });
+      showMsg('createMsg', `Listo. Comparte estos datos con el médico:\nUsuario: ${result.user.username}\nContraseña: ${password}`, true);
+      ['institutionName','institutionAddress','institutionPhone','fullName','username','password','personalId','license','specialty','docEmail','city'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('usernameHint').textContent = '';
+      lastSuggested = '';
+      loadInstitutions();
+    } catch (err) {
+      showMsg('createMsg', err.message, false);
+      if (err.suggestion) {
+        const hint = document.getElementById('usernameHint');
+        hint.innerHTML = 'Prueba con: <a href="#" onclick="document.getElementById(\'username\').value=\'' + err.suggestion + '\'; lastSuggested=\'' + err.suggestion + '\'; return false;">' + err.suggestion + '</a>';
+      }
+    }
+  }
+
+  if (SECRET) unlock();
+
+  // Blindaje: si el navegador restaura esta página desde su caché
+  // (por ejemplo al reabrir una pestaña con "Continuar donde lo dejaste"
+  // o al usar atrás/adelante), el modal de la contraseña NUNCA debe
+  // quedar abierto — siempre arrancamos con la pantalla de acceso limpia.
+  window.addEventListener("pageshow", () => {
+    closePwModal();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closePwModal();
+  });
+
+</script>
+</body>
+</html>

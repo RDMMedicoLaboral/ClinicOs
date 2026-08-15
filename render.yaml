@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: clinic-os
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: "cd frontend && npm install && npm run build && cd ../backend && npm install"
+    startCommand: "cd backend && npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+    # ADMIN_SECRET: defínela tú (cualquier texto largo y difícil de adivinar).
+    # Es la clave que usas en /admin.html para dar de alta instituciones/clínicas nuevas.
+    #
+    # DATABASE_URL: la cadena de conexión de tu base de datos PostgreSQL
+    # (por ejemplo, de Neon.tech, que tiene un plan gratis permanente).
+    # Ver la sección "Base de datos (PostgreSQL / Neon)" del README para
+    # cómo crearla y conectarla. SIN esta variable, el servicio no arranca
+    # (falla rápido con un mensaje de error claro).
