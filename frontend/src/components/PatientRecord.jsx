@@ -43,7 +43,12 @@ function numericOptions(min, max, step, currentValue) {
 }
 
 function formatDateTime(iso) {
-  return new Date(iso.replace(" ", "T")).toLocaleString("es-MX", {
+  // El backend guarda las horas en UTC (hora del servidor). Sin la "Z",
+  // JavaScript interpretaba el texto como si YA fuera hora local del
+  // navegador, mostrando 5 horas de más para Ecuador. Al agregar "Z" le
+  // decimos "esto es UTC", y toLocaleString lo convierte solo a la hora
+  // local de quien lo está viendo.
+  return new Date(iso.replace(" ", "T") + "Z").toLocaleString("es-MX", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -53,7 +58,18 @@ function formatDateTime(iso) {
 }
 
 function dateKey(iso) {
-  return iso.slice(0, 10); // "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DD"
+  // Mismo motivo que formatDateTime: el texto es UTC. Si solo cortáramos
+  // los primeros 10 caracteres agruparíamos por fecha UTC, y una nota
+  // creada de noche en Ecuador (madrugada en UTC) aparecería agrupada
+  // bajo el día siguiente. Acepta tanto "YYYY-MM-DD HH:MM:SS" (formato
+  // del backend) como un ISO ya completo con "Z" (ej. new Date().toISOString()).
+  const normalized = iso.includes("T") ? iso : iso.replace(" ", "T");
+  const withZone = normalized.endsWith("Z") ? normalized : `${normalized}Z`;
+  const d = new Date(withZone);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function formatDayHeading(key) {
