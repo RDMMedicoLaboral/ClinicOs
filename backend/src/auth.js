@@ -29,6 +29,9 @@ export function signToken(user) {
       username: user.username,
       full_name: user.full_name,
       role: user.role,
+      // Solo aplica a role === 'medico': es el médico admin/dueño de la
+      // clínica (distinto del superadmin de la plataforma).
+      is_admin: Boolean(user.is_admin),
       // doctor_id es el límite de aislamiento de datos clínicos: para un
       // médico es su propio id; para secretaria/enfermera, el id del
       // médico al que está asignada.
@@ -62,4 +65,14 @@ export function requireRole(...roles) {
     }
     next();
   };
+}
+
+// Exclusivo del médico admin (dueño de la clínica): gestionar médicos,
+// datos/logo de la clínica y la lista de medicamentos de la institución.
+export function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: "No autenticado" });
+  if (req.user.role !== "medico" || !req.user.is_admin) {
+    return res.status(403).json({ error: "Solo el médico administrador de la clínica puede hacer esto" });
+  }
+  next();
 }

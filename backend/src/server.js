@@ -6,7 +6,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { initDb } from "./db.js";
-import { requireAuth, requireRole } from "./auth.js";
+import { requireAuth, requireRole, requireAdmin } from "./auth.js";
 import { authRouter } from "./routes/auth.js";
 import { adminRouter } from "./routes/admin.js";
 import { verifyRouter } from "./routes/verify.js";
@@ -17,6 +17,8 @@ import { consultationsRouter } from "./routes/consultations.js";
 import { cie11Router } from "./routes/cie11.js";
 import { medicationsRouter } from "./routes/medications.js";
 import { doctorProfileRouter } from "./routes/doctorProfile.js";
+import { institutionRouter } from "./routes/institution.js";
+import { clinicAdminRouter } from "./routes/clinicAdmin.js";
 import { prescriptionsRouter } from "./routes/prescriptions.js";
 import { certificatesRouter } from "./routes/certificates.js";
 import { shareRouter } from "./routes/share.js";
@@ -26,6 +28,19 @@ import { checkAndSendDueReminders } from "./reminders.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// Red de seguridad final: si algo se escapa de todos los try/catch,
+// middlewares de error y listeners puntuales que agregamos (pool de
+// Postgres, streams de PDF), lo registramos en vez de dejar que Node
+// tumbe el proceso completo. Esto es un ÚLTIMO recurso — no reemplaza
+// arreglar la causa raíz de cada error, pero evita que un caso no
+// previsto tire toda la clínica.
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] Promesa rechazada sin capturar (no se detiene el servidor):", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[server] Excepción no capturada (no se detiene el servidor):", err);
+});
 
 app.use(cors());
 // Límite elevado (por defecto Express solo permite 100 KB) para poder
@@ -63,10 +78,19 @@ app.use("/api", remindersRouter); // configuración + envío manual de recordato
 // (se controla dentro de doctorProfileRouter). Una fila por clínica.
 app.use("/api/doctor-profile", doctorProfileRouter);
 
+// Datos de la clínica (nombre/dirección/teléfono/logo): lectura para
+// cualquier rol logueado de la institución; la escritura la protege
+// requireAdmin dentro de clinicAdminRouter.
+app.use("/api/institution", institutionRouter);
+app.use("/api/clinic-admin", requireRole("medico"), requireAdmin, clinicAdminRouter);
+
 // Exclusivo del médico: expediente clínico, recetas.
 app.use("/api/prescriptions", requireRole("medico"), prescriptionsRouter);
 app.use("/api/certificates", requireRole("medico"), certificatesRouter);
-app.use("/api", requireRole("medico"), consultationsRouter);
+// La nota SOAP completa (S/A/P) sigue siendo del médico, pero enfermería
+// puede registrar signos vitales (ver el filtrado por rol dentro de
+// consultationsRouter).
+app.use("/api", requireRole("medico", "enfermera"), consultationsRouter);
 app.use("/api", requireRole("medico"), notificationSettingsRouter); // envío automático de recetas/certificados
 
 // Catálogos compartidos (CIE-10, medicamentos): solo médico, pero NO están

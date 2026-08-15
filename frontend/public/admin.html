@@ -56,6 +56,7 @@
   .toggle-add-doctor { margin-top: 10px; }
   .add-doctor-form { display:none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
   .add-doctor-form.open { display:block; }
+  .badge-admin { display:inline-block; margin-left: 8px; font-size: 0.7rem; font-weight:700; color: var(--accent-dark); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -213,9 +214,11 @@
       <div class="doctor-row">
         <div>
           <strong>${d.full_name}</strong> <code>@${d.username}</code>
+          ${d.is_admin ? '<span class="badge-admin">Admin / dueño de la clínica</span>' : ''}
           <div class="institution-meta">${d.staff_count} equipo · ${d.patient_count} pacientes</div>
         </div>
         <div class="doctor-actions">
+          <button class="secondary small" onclick="toggleDoctorAdmin(${institutionId}, ${d.id}, ${d.is_admin ? 'false' : 'true'})">${d.is_admin ? 'Quitar admin' : 'Hacer admin'}</button>
           <button class="secondary small" onclick="resetDoctorPassword(${institutionId}, ${d.id}, '${d.full_name.replace(/'/g, "")}')">Restablecer clave</button>
           <button class="danger small" onclick="deleteDoctor(${d.id}, '${d.full_name.replace(/'/g, "")}')">Eliminar</button>
         </div>
@@ -254,6 +257,15 @@
     try {
       const result = await api('/institutions/' + institutionId + '/reset-password', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
       openPwModal(result.username, result.password);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function toggleDoctorAdmin(institutionId, doctorId, makeAdmin) {
+    try {
+      await api('/doctors/' + doctorId + '/admin', { method: 'PUT', body: JSON.stringify({ is_admin: makeAdmin }) });
+      loadDoctors(institutionId);
     } catch (err) {
       alert('Error: ' + err.message);
     }

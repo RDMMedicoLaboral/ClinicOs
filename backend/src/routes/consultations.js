@@ -21,6 +21,11 @@ consultationsRouter.get("/patients/:patientId/consultations", async (req, res) =
 });
 
 consultationsRouter.post("/consultations", async (req, res) => {
+  // Las enfermeras solo pueden registrar signos vitales: el subjetivo, el
+  // diagnóstico y el plan quedan reservados al médico (se ignoran aunque
+  // vengan en el body, en vez de fallar, para no complicar el formulario
+  // de enfermería).
+  const isNurse = req.user.role === "enfermera";
   const {
     patient_id,
     appointment_id,
@@ -58,21 +63,25 @@ consultationsRouter.post("/consultations", async (req, res) => {
       req.user.doctor_id,
       patient_id,
       appointment_id ?? null,
-      subjective ?? null,
+      isNurse ? null : subjective ?? null,
       blood_pressure ?? null,
       heart_rate ?? null,
       temperature_c ?? null,
       weight_kg ?? null,
       height_cm ?? null,
       bmi,
-      diagnosis_code ?? null,
-      diagnosis_label ?? null,
-      plan ?? null
+      isNurse ? null : diagnosis_code ?? null,
+      isNurse ? null : diagnosis_label ?? null,
+      isNurse ? null : plan ?? null
     );
 
   await logAudit({ doctorId: req.user.doctor_id, actor: req.user.username, action: "create", entity: "consultation", entityId: result.lastInsertRowid });
 
-  if (appointment_id) {
+  // Cuando una enfermera toma los signos vitales antes de la consulta, la
+  // cita NO se marca como finalizada todavía (eso lo hace el médico al
+  // completar su nota); solo pasa a "en_consulta" si estaba pendiente,
+  // para reflejar que el paciente ya fue atendido por enfermería.
+  if (appointment_id && !isNurse) {
     await db
       .prepare(`UPDATE appointments SET status = 'finalizada', updated_at = to_char(now(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = ?`)
       .run(appointment_id);
@@ -84,6 +93,7 @@ consultationsRouter.post("/consultations", async (req, res) => {
 
 // PUT /api/consultations/:id -> editar una nota ya guardada (por si se escribió con un error)
 consultationsRouter.put("/consultations/:id", async (req, res) => {
+  const isNurse = req.user.role === "enfermera";
   const existing = await db
     .prepare(`SELECT * FROM consultations WHERE id = ? AND doctor_id = ?`)
     .get(req.params.id, req.user.doctor_id);
@@ -112,16 +122,18 @@ consultationsRouter.put("/consultations/:id", async (req, res) => {
        WHERE id = ?`
     )
     .run(
-      subjective ?? null,
+      // La enfermera solo puede tocar signos vitales; el resto de la nota
+      // (escrita por el médico) se conserva tal cual estaba.
+      isNurse ? existing.subjective : subjective ?? null,
       blood_pressure ?? null,
       heart_rate ?? null,
       temperature_c ?? null,
       weight_kg ?? null,
       height_cm ?? null,
       bmi,
-      diagnosis_code ?? null,
-      diagnosis_label ?? null,
-      plan ?? null,
+      isNurse ? existing.diagnosis_code : diagnosis_code ?? null,
+      isNurse ? existing.diagnosis_label : diagnosis_label ?? null,
+      isNurse ? existing.plan : plan ?? null,
       req.params.id
     );
 
@@ -134,6 +146,7 @@ consultationsRouter.put("/consultations/:id", async (req, res) => {
 // pudieran estar ligados a ella (quedan sueltos, con consultation_id NULL,
 // gracias al ON DELETE SET NULL de la base de datos).
 consultationsRouter.delete("/consultations/:id", async (req, res) => {
+  if (req.user.role === "enfermera") return res.status(403).json({ error: "Solo el médico puede eliminar notas de evolución" });
   const existing = await db
     .prepare(`SELECT * FROM consultations WHERE id = ? AND doctor_id = ?`)
     .get(req.params.id, req.user.doctor_id);

@@ -94,7 +94,8 @@ const CERT_TYPE_LABELS = {
   teletrabajo: "Teletrabajo",
 };
 
-export default function PatientRecord({ patientId, appointmentId, onOpenDoctorProfile, onBack }) {
+export default function PatientRecord({ patientId, appointmentId, role, onOpenDoctorProfile, onBack }) {
+  const isNurse = role === "enfermera";
   const [patient, setPatient] = useState(null);
   const [history, setHistory] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
@@ -269,9 +270,11 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
               <h2 className="patient-title">
                 {patient.first_name} {patient.last_name}
               </h2>
-              <button type="button" className="link-btn" onClick={() => setShowEditPatient(true)}>
-                Editar
-              </button>
+              {!isNurse && (
+                <button type="button" className="link-btn" onClick={() => setShowEditPatient(true)}>
+                  Editar
+                </button>
+              )}
             </div>
             {formatAge(patient.birth_date) && (
               <div className="hint" style={{ marginTop: -6, marginBottom: 6 }}>
@@ -339,14 +342,16 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
             <h3 className="history-title" style={{ margin: 0 }}>
               Historial de atenciones
             </h3>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn-primary sm" onClick={() => setShowRxModal(true)}>
-                + Nueva receta
-              </button>
-              <button className="btn-primary sm" onClick={() => setShowCertModal(true)}>
-                + Nuevo certificado
-              </button>
-            </div>
+            {!isNurse && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-primary sm" onClick={() => setShowRxModal(true)}>
+                  + Nueva receta
+                </button>
+                <button className="btn-primary sm" onClick={() => setShowCertModal(true)}>
+                  + Nuevo certificado
+                </button>
+              </div>
+            )}
           </div>
 
           {visits.length === 0 ? (
@@ -386,11 +391,13 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                       {c.plan && <div className="history-field"><strong>P:</strong> {c.plan}</div>}
                       <div className="visit-item-actions">
                         <button type="button" className="link-btn" onClick={() => startEditNote(c)}>
-                          Editar
+                          {isNurse ? "Corregir signos vitales" : "Editar"}
                         </button>
-                        <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteNote(c.id)}>
-                          Eliminar
-                        </button>
+                        {!isNurse && (
+                          <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteNote(c.id)}>
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -404,14 +411,19 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                         <a className="link-btn" href={api.prescriptions.pdfUrl(rx.id)} target="_blank" rel="noreferrer">
                           Ver PDF
                         </a>
-                        <button type="button" className="link-btn" onClick={() => setEditingRx(rx)}>
-                          Editar
-                        </button>
-                        <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteRx(rx.id)}>
-                          Eliminar
-                        </button>
+                        {!isNurse && (
+                          <>
+                            <button type="button" className="link-btn" onClick={() => setEditingRx(rx)}>
+                              Editar
+                            </button>
+                            <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteRx(rx.id)}>
+                              Eliminar
+                            </button>
+                          </>
+                        )}
                       </div>
-                      <div className="visit-item-actions">
+                      {!isNurse && (
+                        <div className="visit-item-actions">
                         <button
                           type="button"
                           className="link-btn"
@@ -428,7 +440,8 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                         >
                           {sendingId === `prescription-${rx.id}-email` ? "Enviando…" : "Enviar por correo"}
                         </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ))}
 
@@ -447,14 +460,19 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                         <a className="link-btn" href={api.certificates.pdfUrl(cert.id)} target="_blank" rel="noreferrer">
                           Ver PDF
                         </a>
-                        <button type="button" className="link-btn" onClick={() => setEditingCert(cert)}>
-                          Editar
-                        </button>
-                        <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteCert(cert.id)}>
-                          Eliminar
-                        </button>
+                        {!isNurse && (
+                          <>
+                            <button type="button" className="link-btn" onClick={() => setEditingCert(cert)}>
+                              Editar
+                            </button>
+                            <button type="button" className="link-btn link-btn-danger" onClick={() => handleDeleteCert(cert.id)}>
+                              Eliminar
+                            </button>
+                          </>
+                        )}
                       </div>
-                      <div className="visit-item-actions">
+                      {!isNurse && (
+                        <div className="visit-item-actions">
                         <button
                           type="button"
                           className="link-btn"
@@ -471,7 +489,8 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                         >
                           {sendingId === `certificate-${cert.id}-email` ? "Enviando…" : "Enviar por correo"}
                         </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </li>
@@ -484,22 +503,24 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
         <section className="record-note folder-card">
           <div className="modal-tab" style={{ background: "#C08A3E" }} />
           <h3 className="modal-title">
-            {editingNoteId ? "Editar nota de evolución (SOAP)" : "Nueva nota de evolución (SOAP)"}
+            {isNurse ? "Registrar signos vitales" : editingNoteId ? "Editar nota de evolución (SOAP)" : "Nueva nota de evolución (SOAP)"}
           </h3>
 
           <form onSubmit={handleSave} className="soap-form">
-            <label className="soap-block">
-              <span className="soap-letter">S · Subjetivo</span>
-              <textarea
-                rows={3}
-                value={note.subjective}
-                onChange={set("subjective")}
-                placeholder="Motivo de consulta, síntomas que refiere el paciente…"
-              />
-            </label>
+            {!isNurse && (
+              <label className="soap-block">
+                <span className="soap-letter">S · Subjetivo</span>
+                <textarea
+                  rows={3}
+                  value={note.subjective}
+                  onChange={set("subjective")}
+                  placeholder="Motivo de consulta, síntomas que refiere el paciente…"
+                />
+              </label>
+            )}
 
             <div className="soap-block">
-              <span className="soap-letter">O · Objetivo (signos vitales)</span>
+              <span className="soap-letter">{isNurse ? "Signos vitales" : "O · Objetivo (signos vitales)"}</span>
               <div className="vitals-grid">
                 <label>
                   Presión arterial
@@ -556,28 +577,32 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
               </div>
             </div>
 
-            <label className="soap-block">
-              <span className="soap-letter">A · Análisis (diagnóstico, CIE-10)</span>
-              <DiagnosisSearch
-                code={note.diagnosis_code}
-                label={note.diagnosis_label}
-                onSelect={({ code, label }) => setNote((n) => ({ ...n, diagnosis_code: code, diagnosis_label: label }))}
-              />
-            </label>
+            {!isNurse && (
+              <label className="soap-block">
+                <span className="soap-letter">A · Análisis (diagnóstico, CIE-10)</span>
+                <DiagnosisSearch
+                  code={note.diagnosis_code}
+                  label={note.diagnosis_label}
+                  onSelect={({ code, label }) => setNote((n) => ({ ...n, diagnosis_code: code, diagnosis_label: label }))}
+                />
+              </label>
+            )}
 
-            <label className="soap-block">
-              <span className="soap-letter">P · Plan</span>
-              <textarea
-                rows={3}
-                value={note.plan}
-                onChange={set("plan")}
-                placeholder="Tratamiento, estudios solicitados, recomendaciones…"
-              />
-            </label>
+            {!isNurse && (
+              <label className="soap-block">
+                <span className="soap-letter">P · Plan</span>
+                <textarea
+                  rows={3}
+                  value={note.plan}
+                  onChange={set("plan")}
+                  placeholder="Tratamiento, estudios solicitados, recomendaciones…"
+                />
+              </label>
+            )}
 
             {error && <p className="form-error">{error}</p>}
-            {savedMsg && <p className="saved-msg">✓ Nota guardada.</p>}
-            {editingNoteId && <p className="hint">Editando una nota existente.</p>}
+            {savedMsg && <p className="saved-msg">✓ Registro guardado.</p>}
+            {editingNoteId && <p className="hint">Editando un registro existente.</p>}
 
             <div className="modal-actions">
               {editingNoteId && (
@@ -586,7 +611,7 @@ export default function PatientRecord({ patientId, appointmentId, onOpenDoctorPr
                 </button>
               )}
               <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? "Guardando…" : editingNoteId ? "Actualizar nota" : "Guardar nota"}
+                {saving ? "Guardando…" : editingNoteId ? "Actualizar" : isNurse ? "Guardar signos vitales" : "Guardar nota"}
               </button>
             </div>
           </form>

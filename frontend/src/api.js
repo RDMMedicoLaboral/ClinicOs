@@ -83,8 +83,35 @@ export const api = {
   doctorProfile: {
     get: () => request(`/doctor-profile`),
     update: (data) => request(`/doctor-profile`, { method: "PUT", body: JSON.stringify(data) }),
-    uploadLogo: (dataUri) => request(`/doctor-profile/logo`, { method: "PUT", body: JSON.stringify({ data_uri: dataUri }) }),
-    removeLogo: () => request(`/doctor-profile/logo`, { method: "DELETE" }),
+  },
+  institution: {
+    get: () => request(`/institution`),
+  },
+  clinicAdmin: {
+    overview: () => request(`/clinic-admin/overview`),
+    updateInstitution: (data) => request(`/clinic-admin/institution`, { method: "PUT", body: JSON.stringify(data) }),
+    uploadLogo: (dataUri) => request(`/clinic-admin/institution/logo`, { method: "PUT", body: JSON.stringify({ data_uri: dataUri }) }),
+    removeLogo: () => request(`/clinic-admin/institution/logo`, { method: "DELETE" }),
+    createDoctor: (data) => request(`/clinic-admin/doctors`, { method: "POST", body: JSON.stringify(data) }),
+    updateDoctor: (id, data) => request(`/clinic-admin/doctors/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    resetDoctorPassword: (id) => request(`/clinic-admin/doctors/${id}/reset-password`, { method: "POST" }),
+    setDoctorAdmin: (id, isAdmin) => request(`/clinic-admin/doctors/${id}/admin`, { method: "PUT", body: JSON.stringify({ is_admin: isAdmin }) }),
+    removeDoctor: (id) => request(`/clinic-admin/doctors/${id}`, { method: "DELETE" }),
+    importMedications: async (file) => {
+      const token = getToken();
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BASE}/clinic-admin/medications/import`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Error ${res.status}`);
+      }
+      return res.json();
+    },
   },
   prescriptions: {
     listByPatient: (patientId) => request(`/prescriptions/patient/${patientId}`),
