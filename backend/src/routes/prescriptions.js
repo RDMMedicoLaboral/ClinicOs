@@ -233,7 +233,13 @@ export function renderPrescriptionPdf({ rx, patient, items, qrBuffer, logoBuffer
     .filter(Boolean)
     .join(" · ");
   if (patientMeta) doc.text(patientMeta);
-  doc.fillColor("#000").fontSize(9).text(`Fecha: ${new Date(rx.created_at.replace(" ", "T")).toLocaleDateString("es-MX")}`);
+  // Mismo fix que en certificates.js: el servidor corre en UTC, sin "Z" +
+  // timeZone explícito la fecha impresa en la receta podía adelantarse un
+  // día si se emitía de noche en Ecuador.
+  doc
+    .fillColor("#000")
+    .fontSize(9)
+    .text(`Fecha: ${new Date(rx.created_at.replace(" ", "T") + "Z").toLocaleDateString("es-MX", { timeZone: "America/Guayaquil" })}`);
   doc.moveDown();
 
   doc.font("Helvetica-Bold").fontSize(13).fillColor(BRAND_BROWN).text("Rx", { underline: false });
