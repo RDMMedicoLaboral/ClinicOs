@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-const MAX_LOGO_MB = 2;
-
-export default function DoctorProfileModal({ onClose, onSaved }) {
+export default function DoctorProfileModal({ isAdmin, onClose, onSaved }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [logoError, setLogoError] = useState(null);
 
   useEffect(() => {
     api.doctorProfile.get().then(setForm);
@@ -20,50 +16,9 @@ export default function DoctorProfileModal({ onClose, onSaved }) {
     setSaving(true);
     try {
       const updated = await api.doctorProfile.update(form);
-      onSaved({ ...updated, logo_base64: form.logo_base64 });
+      onSaved(updated);
     } finally {
       setSaving(false);
-    }
-  }
-
-  function handleLogoFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // permite volver a elegir el mismo archivo después
-    if (!file) return;
-    setLogoError(null);
-
-    if (file.size > MAX_LOGO_MB * 1024 * 1024) {
-      setLogoError(`La imagen debe pesar menos de ${MAX_LOGO_MB} MB.`);
-      return;
-    }
-    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(file.type)) {
-      setLogoError("Solo se aceptan imágenes PNG, JPG o WEBP.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      setLogoUploading(true);
-      try {
-        const result = await api.doctorProfile.uploadLogo(reader.result);
-        setForm((f) => ({ ...f, logo_base64: result.logo_base64 }));
-      } catch (err) {
-        setLogoError(err.message);
-      } finally {
-        setLogoUploading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  async function handleRemoveLogo() {
-    if (!confirm("¿Quitar el logo del consultorio? Volverá a mostrarse el logo genérico de Clínic-Os.")) return;
-    setLogoUploading(true);
-    try {
-      await api.doctorProfile.removeLogo();
-      setForm((f) => ({ ...f, logo_base64: null }));
-    } finally {
-      setLogoUploading(false);
     }
   }
 
@@ -75,44 +30,20 @@ export default function DoctorProfileModal({ onClose, onSaved }) {
         <div className="modal-tab" style={{ background: "#c2632f" }} />
         <h2 className="modal-title">Perfil del médico</h2>
         <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
-          Estos datos aparecen en el encabezado de cada receta y certificado médico que generes.
+          Estos datos aparecen en el encabezado de cada receta y certificado médico que generes. El
+          logo y los datos de la clínica ahora se administran desde el{" "}
+          {isAdmin ? "Panel de administración" : "Panel de administración (solo el médico admin de tu clínica puede editarlos)"}.
         </p>
 
-        <div className="logo-uploader">
-          <div className="logo-preview">
-            {form.logo_base64 ? (
-              <img src={form.logo_base64} alt="Logo del consultorio" />
-            ) : (
-              <img src="/assets/logo.png" alt="Logo genérico de Clínic-Os" style={{ opacity: 0.5 }} />
-            )}
-          </div>
-          <div>
-            <p className="hint" style={{ margin: "0 0 8px" }}>
-              Logo del consultorio {!form.logo_base64 && "(usando el logo genérico de Clínic-Os)"}
-            </p>
-            <label className="btn-ghost sm" style={{ display: "inline-block", cursor: "pointer" }}>
-              {logoUploading ? "Subiendo…" : form.logo_base64 ? "Cambiar logo" : "Subir logo"}
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleLogoFile}
-                disabled={logoUploading}
-                style={{ display: "none" }}
-              />
-            </label>
-            {form.logo_base64 && (
-              <button type="button" className="link-btn" onClick={handleRemoveLogo} disabled={logoUploading} style={{ marginLeft: 10 }}>
-                Quitar
-              </button>
-            )}
-            {logoError && <p className="form-error" style={{ marginTop: 6 }}>{logoError}</p>}
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="form-grid" style={{ marginTop: 18 }}>
+        <form onSubmit={handleSubmit} className="form-grid" style={{ marginTop: 4 }}>
           <label className="span-2">
             Nombre completo
-            <input value={form.full_name} onChange={set("full_name")} placeholder="Dra. Ana Torres" autoFocus />
+            <input value={form.full_name} disabled title="Solo el médico admin de la clínica puede corregir tu nombre" />
+            {!isAdmin && (
+              <span className="hint" style={{ display: "block", marginTop: 4 }}>
+                ¿Está mal escrito? Pídele al médico admin de tu clínica que lo corrija desde el Panel de administración.
+              </span>
+            )}
           </label>
           <label>
             C.I. (cédula personal)
@@ -129,18 +60,6 @@ export default function DoctorProfileModal({ onClose, onSaved }) {
           <label>
             Correo electrónico
             <input type="email" value={form.email} onChange={set("email")} />
-          </label>
-          <label className="span-2">
-            Nombre del consultorio
-            <input value={form.clinic_name} onChange={set("clinic_name")} />
-          </label>
-          <label className="span-2">
-            Dirección
-            <input value={form.clinic_address} onChange={set("clinic_address")} />
-          </label>
-          <label>
-            Teléfono
-            <input value={form.clinic_phone} onChange={set("clinic_phone")} />
           </label>
           <label>
             Ciudad (lugar de emisión)

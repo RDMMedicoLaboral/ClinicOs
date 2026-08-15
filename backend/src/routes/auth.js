@@ -29,6 +29,7 @@ authRouter.post("/login", async (req, res) => {
     username: row.username,
     full_name: row.full_name,
     role: row.role,
+    is_admin: Boolean(row.is_admin),
     // Un médico es dueño de sus propios datos (doctor_id = su propio id).
     // Una secretaria/enfermera hereda el doctor_id de su médico asignado.
     doctor_id: row.role === "medico" ? row.id : row.doctor_id,

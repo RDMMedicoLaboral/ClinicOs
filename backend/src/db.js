@@ -28,6 +28,20 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// CRÍTICO para no tumbar el proceso completo en Render: "pg" emite un
+// evento "error" en el Pool cuando un cliente que está inactivo (idle)
+// pierde la conexión (por ejemplo porque Neon cierra conexiones ociosas
+// tras un rato, algo común en el plan gratis). Si nadie escucha ese
+// evento, Node lo trata como una excepción no capturada y TUMBA todo el
+// servidor — no solo la consulta que falló. Esto explica caídas
+// intermitentes que "no tienen relación" con lo que se estaba haciendo:
+// basta con que una conexión inactiva se caiga en segundo plano.
+// Con este listener, el error solo se registra y el pool sigue
+// funcionando (abre una conexión nueva en la siguiente consulta).
+pool.on("error", (err) => {
+  console.error("[db] Error inesperado en una conexión inactiva del pool (no se detiene el servidor):", err.message);
+});
+
 // ---------- Shim de compatibilidad ----------
 // El resto del backend fue escrito originalmente contra la API síncrona de
 // better-sqlite3: `db.prepare(sql).get(a, b)`, `.all(a, b)`, `.run(a, b)`,
@@ -144,6 +158,10 @@ export async function initDb() {
       name TEXT NOT NULL,
       address TEXT,
       phone TEXT,
+      -- Logo de la clínica (data URI base64), compartido por TODOS los
+      -- médicos de la institución. Solo el médico admin (dueño de la
+      -- clínica) puede cambiarlo, desde el Panel de administración.
+      logo_base64 TEXT,
       created_at TEXT NOT NULL DEFAULT (${NOW_TEXT})
     );
 
@@ -166,6 +184,12 @@ export async function initDb() {
       password_hash TEXT NOT NULL,
       full_name TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('medico', 'secretaria', 'enfermera')),
+      -- Solo tiene sentido para role = 'medico': marca al médico "dueño"
+      -- de la clínica (distinto de ti, el superadmin de la plataforma).
+      -- El admin puede crear/editar cuentas de otros médicos, corregir
+      -- nombres, y es el único que administra el logo/datos de la clínica
+      -- y la lista de medicamentos propios.
+      is_admin INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (${NOW_TEXT})
     );
     CREATE INDEX IF NOT EXISTS idx_users_institution ON users(institution_id);
@@ -394,6 +418,23 @@ export async function initDb() {
   await ensureColumn("patients", "clinical_history_number", "TEXT");
   await ensureColumn("prescriptions", "updated_at", "TEXT");
   await ensureColumn("certificates", "updated_at", "TEXT");
+  await ensureColumn("users", "is_admin", "INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn("institutions", "logo_base64", "TEXT");
+
+  // Clínicas creadas ANTES de que existiera el rol de admin (dueño de la
+  // clínica): les asignamos como admin al médico más antiguo de cada
+  // institución que todavía no tenga ninguno, para que el Panel de
+  // administración no quede huérfano tras esta actualización.
+  await pool.query(`
+    UPDATE users u SET is_admin = 1
+    WHERE u.role = 'medico'
+      AND u.id = (
+        SELECT MIN(u2.id) FROM users u2 WHERE u2.institution_id = u.institution_id AND u2.role = 'medico'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM users u3 WHERE u3.institution_id = u.institution_id AND u3.role = 'medico' AND u3.is_admin = 1
+      )
+  `);
 
   // ---------- Catálogo CIE-10 en español (más de 11,000 códigos) ----------
   // Se carga desde backend/data/cie10-es.json — un archivo de datos local,
@@ -462,6 +503,21 @@ export async function initDb() {
       [generics, commercials, presentations]
     );
   }
+
+  // Constraint para poder hacer UPSERT también en institution_medications
+  // (usado por la carga masiva desde Excel en el Panel de administración,
+  // para no duplicar filas si el admin sube la misma lista dos veces).
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'institution_medications_unique_key'
+      ) THEN
+        ALTER TABLE institution_medications
+          ADD CONSTRAINT institution_medications_unique_key UNIQUE (institution_id, generic_name, presentation);
+      END IF;
+    END $$;
+  `);
 }
 
 export async function logAudit({ institutionId = null, doctorId = null, actor = "sistema", action, entity, entityId, detail }) {

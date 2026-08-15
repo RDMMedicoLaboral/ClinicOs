@@ -6,9 +6,22 @@ import { notifyDocumentIssued } from "../notifications.js";
 
 export const prescriptionsRouter = Router();
 
+// Datos profesionales del médico + datos de la clínica (compartidos por
+// todos los médicos de la institución; el admin es el único que los
+// edita, en Panel de administración).
 async function getDoctorProfile(doctorId) {
+  const row = await db
+    .prepare(
+      `SELECT dp.full_name, dp.professional_license, dp.specialty,
+              i.name AS clinic_name, i.address AS clinic_address, i.phone AS clinic_phone
+         FROM users u
+         JOIN institutions i ON i.id = u.institution_id
+         LEFT JOIN doctor_profile dp ON dp.doctor_id = u.id
+        WHERE u.id = ?`
+    )
+    .get(doctorId);
   return (
-    (await db.prepare(`SELECT * FROM doctor_profile WHERE doctor_id = ?`).get(doctorId)) || {
+    row || {
       full_name: "",
       professional_license: "",
       specialty: "",
@@ -43,6 +56,10 @@ function parseLogoBuffer(dataUri) {
     return null;
   }
 }
+
+// Mismos tonos "tierra" de marca que --accent / --accent-dark en el
+// frontend, usados en los títulos de la receta.
+const BRAND_BROWN = "#8f4620";
 
 prescriptionsRouter.post("/", async (req, res) => {
   const { patient_id, consultation_id, items, instructions } = req.body;
@@ -151,12 +168,15 @@ export async function getPrescriptionReadyForPdf(rxId, req) {
   const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 200 });
   const qrBuffer = Buffer.from(qrDataUrl.split(",")[1], "base64");
 
-  // El logo se toma del perfil ACTUAL del médico (no queda "congelado" en
-  // la receta al emitirla) — así, si el consultorio cambia de logo más
-  // adelante, los documentos reimpresos reflejan el logo vigente, en vez
-  // de duplicar la imagen completa en cada receta guardada.
-  const doctorNow = await getDoctorProfile(rx.doctor_id);
-  const logoBuffer = parseLogoBuffer(doctorNow.logo_base64);
+  // El logo se toma del logo ACTUAL de la CLÍNICA (no del médico
+  // individual, y no queda "congelado" en la receta al emitirla) — así,
+  // si el admin cambia el logo más adelante, los documentos reimpresos
+  // reflejan el logo vigente, en vez de duplicar la imagen completa en
+  // cada receta guardada.
+  const institution = await db
+    .prepare(`SELECT i.logo_base64 FROM institutions i JOIN users u ON u.institution_id = i.id WHERE u.id = ?`)
+    .get(rx.doctor_id);
+  const logoBuffer = parseLogoBuffer(institution?.logo_base64);
 
   return { rx, patient, items, qrBuffer, logoBuffer };
 }
@@ -166,6 +186,9 @@ export async function getPrescriptionReadyForPdf(rxId, req) {
 // el link público de WhatsApp.
 export function renderPrescriptionPdf({ rx, patient, items, qrBuffer, logoBuffer }, writable) {
   const doc = new PDFDocument({ size: "A5", margin: 40 });
+  // Ver el mismo listener en certificates.js: evita que un error de
+  // pdfkit o del stream de salida tumbe todo el proceso.
+  doc.on("error", (err) => console.error("[prescriptions] Error generando el PDF:", err.message));
   doc.pipe(writable);
 
   const textStartX = logoBuffer ? doc.x + 46 : doc.x;
@@ -173,7 +196,7 @@ export function renderPrescriptionPdf({ rx, patient, items, qrBuffer, logoBuffer
   if (logoBuffer) {
     doc.image(logoBuffer, doc.x, headerTop, { width: 38, height: 38 });
   }
-  doc.font("Helvetica-Bold").fontSize(16).text(rx.clinic_name || "Consultorio médico", textStartX, headerTop);
+  doc.font("Helvetica-Bold").fontSize(16).fillColor(BRAND_BROWN).text(rx.clinic_name || "Consultorio médico", textStartX, headerTop);
   doc.font("Helvetica").fontSize(10).fillColor("#555");
   if (rx.clinic_address) doc.text(rx.clinic_address, textStartX);
   if (rx.clinic_phone) doc.text(`Tel: ${rx.clinic_phone}`, textStartX);
@@ -202,7 +225,8 @@ export function renderPrescriptionPdf({ rx, patient, items, qrBuffer, logoBuffer
   doc.fillColor("#000").fontSize(9).text(`Fecha: ${new Date(rx.created_at.replace(" ", "T")).toLocaleDateString("es-MX")}`);
   doc.moveDown();
 
-  doc.font("Helvetica-Bold").fontSize(13).text("Rx", { underline: false });
+  doc.font("Helvetica-Bold").fontSize(13).fillColor(BRAND_BROWN).text("Rx", { underline: false });
+  doc.fillColor("#000");
   doc.moveDown(0.3);
   items.forEach((item, i) => {
     doc.font("Helvetica-Bold").fontSize(10).text(`${i + 1}. ${item.generic_name}${item.commercial_name ? ` (${item.commercial_name})` : ""}`);
@@ -237,6 +261,12 @@ prescriptionsRouter.get("/:id/pdf", async (req, res) => {
 
   const ready = await getPrescriptionReadyForPdf(req.params.id, req);
   if (!ready) return res.status(404).json({ error: "Receta no encontrada" });
+
+  // Ver el mismo comentario en certificates.js: sin este listener, una
+  // conexión interrumpida a media descarga puede tumbar todo el servidor.
+  res.on("error", (err) => {
+    console.error("[prescriptions] Conexión interrumpida al descargar el PDF (no se detiene el servidor):", err.message);
+  });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="receta-${ready.rx.id}.pdf"`);

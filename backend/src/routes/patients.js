@@ -7,7 +7,9 @@ export const patientsRouter = Router();
 const CLINICAL_FIELDS = ["allergies", "chronic_conditions", "notes"];
 
 function redactForRole(patient, role) {
-  if (role === "medico") return patient;
+  // Las enfermeras sí necesitan ver alergias/antecedentes al tomar signos
+  // vitales (por seguridad clínica); solo se ocultan para secretaria.
+  if (role === "medico" || role === "enfermera") return patient;
   const copy = { ...patient };
   for (const f of CLINICAL_FIELDS) delete copy[f];
   return copy;

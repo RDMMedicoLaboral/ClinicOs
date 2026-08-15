@@ -48,7 +48,7 @@ adminRouter.get("/institutions", async (_req, res) => {
 adminRouter.get("/institutions/:id/doctors", async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT u.id, u.username, u.full_name, u.created_at,
+      `SELECT u.id, u.username, u.full_name, u.is_admin, u.created_at,
         (SELECT COUNT(*) FROM users s WHERE s.doctor_id = u.id) AS staff_count,
         (SELECT COUNT(*) FROM patients p WHERE p.doctor_id = u.id) AS patient_count
        FROM users u WHERE u.institution_id = ? AND u.role = 'medico' ORDER BY u.full_name`
@@ -112,8 +112,12 @@ adminRouter.post("/institutions", async (req, res) => {
   const institutionId = instResult.lastInsertRowid;
 
   const password_hash = bcrypt.hashSync(password, 10);
+  // El primer médico de una clínica nueva queda marcado como admin/dueño
+  // automáticamente: alguien tiene que poder gestionar el resto (agregar
+  // colegas, corregir nombres, subir el logo, cargar medicinas) sin
+  // depender de ti para cada cambio.
   const userResult = await db
-    .prepare(`INSERT INTO users (institution_id, doctor_id, username, password_hash, full_name, role) VALUES (?, NULL, ?, ?, ?, 'medico')`)
+    .prepare(`INSERT INTO users (institution_id, doctor_id, username, password_hash, full_name, role, is_admin) VALUES (?, NULL, ?, ?, ?, 'medico', 1)`)
     .run(institutionId, username.trim().toLowerCase(), password_hash, full_name);
   const doctorId = userResult.lastInsertRowid;
 
@@ -144,7 +148,7 @@ adminRouter.post("/institutions", async (req, res) => {
 
   res.status(201).json({
     institution: { id: institutionId, name: institution_name },
-    user: { id: doctorId, username: username.trim().toLowerCase(), full_name, role: "medico" },
+    user: { id: doctorId, username: username.trim().toLowerCase(), full_name, role: "medico", is_admin: true },
   });
 });
 
@@ -154,7 +158,7 @@ adminRouter.post("/institutions/:id/doctors", async (req, res) => {
   const institution = await db.prepare(`SELECT * FROM institutions WHERE id = ?`).get(req.params.id);
   if (!institution) return res.status(404).json({ error: "Institución no encontrada" });
 
-  const { username, password, full_name, personal_id, professional_license, specialty, email, city } = req.body;
+  const { username, password, full_name, personal_id, professional_license, specialty, email, city, is_admin } = req.body;
   if (!username || !password || !full_name) {
     return res.status(400).json({ error: "username, password y full_name son obligatorios" });
   }
@@ -172,8 +176,8 @@ adminRouter.post("/institutions/:id/doctors", async (req, res) => {
 
   const password_hash = bcrypt.hashSync(password, 10);
   const userResult = await db
-    .prepare(`INSERT INTO users (institution_id, doctor_id, username, password_hash, full_name, role) VALUES (?, NULL, ?, ?, ?, 'medico')`)
-    .run(institution.id, username.trim().toLowerCase(), password_hash, full_name);
+    .prepare(`INSERT INTO users (institution_id, doctor_id, username, password_hash, full_name, role, is_admin) VALUES (?, NULL, ?, ?, ?, 'medico', ?)`)
+    .run(institution.id, username.trim().toLowerCase(), password_hash, full_name, is_admin ? 1 : 0);
   const doctorId = userResult.lastInsertRowid;
 
   await db
@@ -184,9 +188,32 @@ adminRouter.post("/institutions/:id/doctors", async (req, res) => {
     )
     .run(doctorId, full_name, personal_id ?? "", professional_license ?? "", specialty ?? "", email ?? "", city ?? "", institution.name, institution.address ?? "", institution.phone ?? "");
 
-  await logAudit({ institutionId: institution.id, doctorId, actor: "admin", action: "create", entity: "user", entityId: doctorId, detail: { role: "medico" } });
+  await logAudit({ institutionId: institution.id, doctorId, actor: "admin", action: "create", entity: "user", entityId: doctorId, detail: { role: "medico", is_admin: Boolean(is_admin) } });
 
-  res.status(201).json({ id: doctorId, username: username.trim().toLowerCase(), full_name, role: "medico" });
+  res.status(201).json({ id: doctorId, username: username.trim().toLowerCase(), full_name, role: "medico", is_admin: Boolean(is_admin) });
+});
+
+// PUT /api/admin/doctors/:id/admin -> te (superadmin) permite designar o
+// quitarle a un médico el rol de admin/dueño de la clínica (por ejemplo,
+// si el dueño original deja la clínica y hay que pasarle el puesto a
+// otro médico, o si una clínica antigua migrada quedó sin admin).
+adminRouter.put("/doctors/:id/admin", async (req, res) => {
+  const doctor = await db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'medico'`).get(req.params.id);
+  if (!doctor) return res.status(404).json({ error: "Médico no encontrado" });
+
+  const { is_admin } = req.body;
+  if (is_admin === false) {
+    const otherAdmins = await db
+      .prepare(`SELECT COUNT(*)::int AS n FROM users WHERE institution_id = ? AND role = 'medico' AND is_admin = 1 AND id != ?`)
+      .get(doctor.institution_id, doctor.id);
+    if (!otherAdmins || otherAdmins.n < 1) {
+      return res.status(400).json({ error: "Esta clínica se quedaría sin ningún médico admin; designa otro admin primero" });
+    }
+  }
+
+  await db.prepare(`UPDATE users SET is_admin = ? WHERE id = ?`).run(is_admin ? 1 : 0, doctor.id);
+  await logAudit({ institutionId: doctor.institution_id, doctorId: doctor.id, actor: "admin", action: "update", entity: "user", entityId: doctor.id, detail: { is_admin: Boolean(is_admin) } });
+  res.json({ id: doctor.id, is_admin: Boolean(is_admin) });
 });
 
 // DELETE /api/admin/institutions/:id -> borra una institución y TODO lo que

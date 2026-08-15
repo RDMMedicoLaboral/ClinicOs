@@ -18,6 +18,13 @@ shareRouter.get("/certificates/:token/pdf", async (req, res) => {
   const ready = await getCertificateReadyForPdf(row.id);
   if (!ready) return res.status(404).send("Certificado no encontrado");
 
+  // Este endpoint lo golpea Twilio/WhatsApp para adjuntar el PDF: si la
+  // conexión se corta a medio envío, sin este listener el proceso entero
+  // se cae (ver el mismo comentario en certificates.js).
+  res.on("error", (err) => {
+    console.error("[share] Conexión interrumpida sirviendo el certificado (no se detiene el servidor):", err.message);
+  });
+
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="certificado-${ready.cert.id}.pdf"`);
   renderCertificatePdf(ready.cert, ready.logoBuffer, res);
@@ -29,6 +36,10 @@ shareRouter.get("/prescriptions/:token/pdf", async (req, res) => {
 
   const ready = await getPrescriptionReadyForPdf(row.id, req);
   if (!ready) return res.status(404).send("Receta no encontrada");
+
+  res.on("error", (err) => {
+    console.error("[share] Conexión interrumpida sirviendo la receta (no se detiene el servidor):", err.message);
+  });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="receta-${ready.rx.id}.pdf"`);

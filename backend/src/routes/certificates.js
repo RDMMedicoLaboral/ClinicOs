@@ -11,15 +11,16 @@ export const certificatesRouter = Router();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Logo de Clínic-Os (la aplicación), no confundir con el logo del consultorio
-// (que cada clínica sube desde "Perfil del médico"). Se carga una sola vez
-// al arrancar el proceso.
+// Logo de Clínic-Os (la aplicación), no confundir con el logo de la
+// clínica (que el médico admin sube desde el Panel de administración).
+// Se carga una sola vez al arrancar el proceso.
 const APP_LOGO_PATH = path.join(__dirname, "..", "assets", "app-logo.png");
 const appLogoBuffer = fs.existsSync(APP_LOGO_PATH) ? fs.readFileSync(APP_LOGO_PATH) : null;
 
-// Azul institucional de Clínic-Os (mismo tono que --accent en el frontend),
-// usado para los títulos del certificado.
-const BRAND_BLUE = "#0460d3";
+// Colores de marca de Clínic-Os (mismos tonos "tierra" que --accent /
+// --accent-dark en el frontend), usados para los títulos del certificado.
+const BRAND_BROWN = "#8f4620";
+const BRAND_BROWN_LIGHT = "#c2632f";
 
 const TYPE_LABELS = {
   enfermedad: "Enfermedad",
@@ -27,9 +28,24 @@ const TYPE_LABELS = {
   teletrabajo: "Teletrabajo",
 };
 
+// Trae el perfil profesional del médico (nombre, cédula, especialidad…)
+// MÁS los datos de la clínica (nombre, dirección, teléfono), que ahora
+// viven en la institución — así todos los médicos de una misma clínica
+// muestran siempre el mismo membrete, y el admin los edita en un solo
+// lugar para todos.
 async function getDoctorProfile(doctorId) {
+  const row = await db
+    .prepare(
+      `SELECT dp.full_name, dp.personal_id, dp.professional_license, dp.specialty, dp.email, dp.city,
+              i.name AS clinic_name, i.address AS clinic_address, i.phone AS clinic_phone
+         FROM users u
+         JOIN institutions i ON i.id = u.institution_id
+         LEFT JOIN doctor_profile dp ON dp.doctor_id = u.id
+        WHERE u.id = ?`
+    )
+    .get(doctorId);
   return (
-    (await db.prepare(`SELECT * FROM doctor_profile WHERE doctor_id = ?`).get(doctorId)) || {
+    row || {
       full_name: "",
       personal_id: "",
       professional_license: "",
@@ -238,7 +254,8 @@ certificatesRouter.delete("/:id", async (req, res) => {
 });
 
 // Prepara los datos de un certificado (con el fallback del perfil actual
-// del médico) y devuelve también el logo del consultorio vigente — usado
+// del médico) y devuelve también el logo de la CLÍNICA vigente (compartido
+// por todos los médicos de la institución, lo sube el admin) — usado
 // tanto por la ruta autenticada de descarga como por el envío por
 // WhatsApp/correo y la ruta pública de compartir.
 export async function getCertificateReadyForPdf(certId) {
@@ -246,7 +263,10 @@ export async function getCertificateReadyForPdf(certId) {
   if (!cert) return null;
 
   const doctorNow = await getDoctorProfile(cert.doctor_id);
-  const logoBuffer = parseLogoBuffer(doctorNow.logo_base64);
+  const institution = await db
+    .prepare(`SELECT i.logo_base64 FROM institutions i JOIN users u ON u.institution_id = i.id WHERE u.id = ?`)
+    .get(cert.doctor_id);
+  const logoBuffer = parseLogoBuffer(institution?.logo_base64);
   cert.doctor_specialty = cert.doctor_specialty || doctorNow.specialty || null;
   cert.doctor_license = cert.doctor_license || doctorNow.professional_license || null;
   cert.doctor_personal_id = cert.doctor_personal_id || doctorNow.personal_id || null;
@@ -261,6 +281,10 @@ export async function getCertificateReadyForPdf(certId) {
 // donde vive el diseño del certificado.
 export function renderCertificatePdf(cert, logoBuffer, writable) {
   const doc = new PDFDocument({ size: "A4", margin: 34 });
+  // Mismo motivo que el listener en la ruta /pdf: sin esto, un error
+  // interno de pdfkit (ej. imagen corrupta) puede escalar a una excepción
+  // no capturada y tumbar el proceso completo.
+  doc.on("error", (err) => console.error("[certificates] Error generando el PDF:", err.message));
   doc.pipe(writable);
 
   const margin = doc.page.margins.left;
@@ -275,8 +299,8 @@ export function renderCertificatePdf(cert, logoBuffer, writable) {
   };
   const sectionTitle = (text) => {
     doc.moveDown(1.3); // 1-2 líneas de aire entre el bloque anterior (membrete/A/B/C) y el siguiente
-    doc.font("Helvetica-Bold").fontSize(10.5).fillColor(BRAND_BLUE).text(text);
-    doc.moveTo(doc.x, doc.y + 2).lineTo(doc.page.width - doc.page.margins.right, doc.y + 2).strokeColor(BRAND_BLUE).opacity(0.35).stroke().opacity(1);
+    doc.font("Helvetica-Bold").fontSize(10.5).fillColor(BRAND_BROWN).text(text);
+    doc.moveTo(doc.x, doc.y + 2).lineTo(doc.page.width - doc.page.margins.right, doc.y + 2).strokeColor(BRAND_BROWN).opacity(0.35).stroke().opacity(1);
     doc.moveDown(0.4);
   };
 
@@ -309,12 +333,12 @@ export function renderCertificatePdf(cert, logoBuffer, writable) {
     .fillColor("#333")
     .text("Clínic-Os", doc.page.width - margin - sideColWidth, headerTop + logoSize + 4, { width: sideColWidth, align: "center" });
 
-  doc.font("Helvetica-Bold").fontSize(15).fillColor(BRAND_BLUE).text("CERTIFICADO MÉDICO", centerX, headerTop + 6, {
+  doc.font("Helvetica-Bold").fontSize(15).fillColor(BRAND_BROWN).text("CERTIFICADO MÉDICO", centerX, headerTop + 6, {
     width: centerWidth,
     align: "center",
   });
   if (cert.doctor_name) {
-    doc.font("Helvetica-Bold").fontSize(11.5).fillColor(BRAND_BLUE).text(cert.doctor_name, centerX, doc.y + 4, {
+    doc.font("Helvetica-Bold").fontSize(11.5).fillColor(BRAND_BROWN).text(cert.doctor_name, centerX, doc.y + 4, {
       width: centerWidth,
       align: "center",
     });
@@ -392,6 +416,17 @@ certificatesRouter.get("/:id/pdf", async (req, res) => {
 
   const ready = await getCertificateReadyForPdf(req.params.id);
   if (!ready) return res.status(404).json({ error: "Certificado no encontrado" });
+
+  // Si el cliente cierra la conexión a medio descargar (muy común en
+  // móvil: el usuario sale de la vista previa antes de que termine de
+  // cargar), el stream de respuesta emite un evento "error" (ECONNRESET/
+  // EPIPE). Sin este listener, Node lo trata como excepción no capturada
+  // y TUMBA TODO EL SERVIDOR — este es el bug reportado de que "Render se
+  // cae" al generar certificados. Con el listener, solo se registra y el
+  // resto de la app sigue funcionando con normalidad.
+  res.on("error", (err) => {
+    console.error("[certificates] Conexión interrumpida al descargar el PDF (no se detiene el servidor):", err.message);
+  });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="certificado-${ready.cert.id}.pdf"`);

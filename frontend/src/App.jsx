@@ -5,6 +5,7 @@ import PatientModal from "./components/PatientModal.jsx";
 import AppointmentModal from "./components/AppointmentModal.jsx";
 import PatientRecord from "./components/PatientRecord.jsx";
 import DoctorProfileModal from "./components/DoctorProfileModal.jsx";
+import ClinicAdminModal from "./components/ClinicAdminModal.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import UsersModal from "./components/UsersModal.jsx";
 import InstitutionMedicationsModal from "./components/InstitutionMedicationsModal.jsx";
@@ -57,6 +58,12 @@ export default function App() {
   }
 
   const isMedico = user?.role === "medico";
+  const isNurse = user?.role === "enfermera";
+  const isAdmin = Boolean(user?.is_admin);
+  // Enfermería puede abrir el expediente para registrar signos vitales,
+  // pero no el resto de funciones exclusivas del médico (recetas,
+  // certificados, notas SOAP completas).
+  const canOpenRecord = isMedico || isNurse;
 
   // ---------- Datos de la app ----------
   const [date, setDate] = useState(todayISO());
@@ -74,12 +81,13 @@ export default function App() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showClinicAdmin, setShowClinicAdmin] = useState(false);
   const [clinicLogo, setClinicLogo] = useState(null);
 
   const loadClinicLogo = useCallback(async () => {
     try {
-      const profile = await api.doctorProfile.get();
-      setClinicLogo(profile.logo_base64 || null);
+      const institution = await api.institution.get();
+      setClinicLogo(institution.logo_base64 || null);
     } catch {
       setClinicLogo(null);
     }
@@ -195,6 +203,16 @@ export default function App() {
                   >
                     Medicamentos de la clínica
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setShowClinicAdmin(true);
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Panel de administración
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setShowReminders(true);
@@ -237,10 +255,11 @@ export default function App() {
 
       <div className="app-body">
         <main className="main">
-          {record && isMedico ? (
+          {record && canOpenRecord ? (
             <PatientRecord
               patientId={record.patientId}
               appointmentId={record.appointmentId}
+              role={user.role}
               onOpenDoctorProfile={() => setShowDoctorProfile(true)}
               onBack={() => {
                 setRecord(null);
@@ -273,9 +292,9 @@ export default function App() {
               <AgendaView
                 appointments={appointments}
                 loading={loading}
-                isMedico={isMedico}
+                isMedico={canOpenRecord}
                 onChangeStatus={handleStatusChange}
-                onOpenRecord={(patientId, appointmentId) => isMedico && setRecord({ patientId, appointmentId })}
+                onOpenRecord={(patientId, appointmentId) => canOpenRecord && setRecord({ patientId, appointmentId })}
                 onSendReminder={handleSendReminder}
               />
             </>
@@ -298,8 +317,8 @@ export default function App() {
             {filteredPatients.map((p) => (
               <li
                 key={p.id}
-                className={isMedico ? "clickable" : ""}
-                onClick={() => isMedico && setRecord({ patientId: p.id, appointmentId: null })}
+                className={canOpenRecord ? "clickable" : ""}
+                onClick={() => canOpenRecord && setRecord({ patientId: p.id, appointmentId: null })}
               >
                 <span>
                   {p.first_name} {p.last_name}
@@ -341,6 +360,7 @@ export default function App() {
 
       {showDoctorProfile && isMedico && (
         <DoctorProfileModal
+          isAdmin={isAdmin}
           onClose={() => setShowDoctorProfile(false)}
           onSaved={() => {
             setShowDoctorProfile(false);
@@ -348,6 +368,8 @@ export default function App() {
           }}
         />
       )}
+
+      {showClinicAdmin && isAdmin && <ClinicAdminModal onClose={() => setShowClinicAdmin(false)} onSaved={loadClinicLogo} />}
 
       {showUsers && isMedico && <UsersModal onClose={() => setShowUsers(false)} />}
       {showMedications && isMedico && <InstitutionMedicationsModal onClose={() => setShowMedications(false)} />}
