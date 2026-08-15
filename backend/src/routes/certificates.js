@@ -364,10 +364,14 @@ export function renderCertificatePdf(cert, logoBuffer, writable) {
   row("Dirección del establecimiento de salud:", cert.clinic_address);
   row(
     "Lugar y fecha de emisión:",
-    `${cert.issue_place || ""}, ${new Date(cert.created_at.replace(" ", "T")).toLocaleDateString("es-MX", {
+    // El servidor corre en UTC (Render); sin "Z" + timeZone explícito,
+    // un certificado emitido de noche en Ecuador podía imprimir la fecha
+    // del día SIGUIENTE por error — importante en un documento oficial.
+    `${cert.issue_place || ""}, ${new Date(cert.created_at.replace(" ", "T") + "Z").toLocaleDateString("es-MX", {
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: "America/Guayaquil",
     })}`
   );
 
