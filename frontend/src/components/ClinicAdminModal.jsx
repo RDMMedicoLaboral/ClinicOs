@@ -105,8 +105,11 @@ function ClinicaTab({ institution, onChanged }) {
       setLogoError(`La imagen debe pesar menos de ${MAX_LOGO_MB} MB.`);
       return;
     }
-    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(file.type)) {
-      setLogoError("Solo se aceptan imágenes PNG, JPG o WEBP.");
+    // PDFKit (la librería que arma los PDF de recetas/certificados) NO
+    // soporta WEBP, solo PNG y JPEG — si se sube WEBP, todas las recetas
+    // y certificados de la clínica fallan al generarse.
+    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setLogoError("Solo se aceptan imágenes PNG o JPG (WEBP no es compatible con los PDF).");
       return;
     }
     const reader = new FileReader();
@@ -149,7 +152,7 @@ function ClinicaTab({ institution, onChanged }) {
           </p>
           <label className="btn-ghost sm" style={{ display: "inline-block", cursor: "pointer" }}>
             {logoUploading ? "Subiendo…" : logo ? "Cambiar logo" : "Subir logo"}
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoFile} disabled={logoUploading} style={{ display: "none" }} />
+            <input type="file" accept="image/png,image/jpeg" onChange={handleLogoFile} disabled={logoUploading} style={{ display: "none" }} />
           </label>
           {logo && (
             <button type="button" className="link-btn" onClick={handleRemoveLogo} disabled={logoUploading} style={{ marginLeft: 10 }}>

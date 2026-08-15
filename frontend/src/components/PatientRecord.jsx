@@ -108,6 +108,7 @@ export default function PatientRecord({ patientId, appointmentId, role, onOpenDo
   const [showEditPatient, setShowEditPatient] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [note, setNote] = useState(EMPTY_NOTE);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -115,12 +116,18 @@ export default function PatientRecord({ patientId, appointmentId, role, onOpenDo
 
   async function load() {
     setLoading(true);
+    setLoadError(null);
     try {
+      // Enfermería no tiene permiso sobre /api/prescriptions ni
+      // /api/certificates (son exclusivos del médico): si se piden de
+      // todas formas, el 403 tumba el Promise.all completo y el
+      // expediente se queda colgado en "Cargando expediente…" para
+      // siempre. Para una enfermera, ni falta que le hacen.
       const [p, h, rx, certs, profile] = await Promise.all([
         api.patients.get(patientId),
         api.consultations.listByPatient(patientId),
-        api.prescriptions.listByPatient(patientId),
-        api.certificates.listByPatient(patientId),
+        isNurse ? Promise.resolve([]) : api.prescriptions.listByPatient(patientId),
+        isNurse ? Promise.resolve([]) : api.certificates.listByPatient(patientId),
         api.doctorProfile.get(),
       ]);
       setPatient(p);
@@ -128,6 +135,10 @@ export default function PatientRecord({ patientId, appointmentId, role, onOpenDo
       setPrescriptions(rx);
       setCertificates(certs);
       setDoctorReady(Boolean(profile.full_name));
+    } catch (err) {
+      // Antes, cualquier falla aquí dejaba la pantalla en "Cargando
+      // expediente…" para siempre sin ninguna pista de qué pasó.
+      setLoadError(err.message || "No se pudo cargar el expediente.");
     } finally {
       setLoading(false);
     }
@@ -239,6 +250,17 @@ export default function PatientRecord({ patientId, appointmentId, role, onOpenDo
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loadError) {
+    return (
+      <div className="empty-state">
+        <p className="form-error">No se pudo cargar el expediente: {loadError}</p>
+        <button type="button" className="btn-ghost" onClick={onBack}>
+          ← Volver a la agenda
+        </button>
+      </div>
+    );
   }
 
   if (loading || !patient) {
