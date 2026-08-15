@@ -69,8 +69,13 @@ clinicAdminRouter.put("/institution/logo", async (req, res) => {
   if (!data_uri || typeof data_uri !== "string" || !data_uri.startsWith("data:image/")) {
     return res.status(400).json({ error: "Formato de imagen inválido" });
   }
-  const match = data_uri.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
-  if (!match) return res.status(400).json({ error: "Solo se aceptan imágenes PNG, JPG o WEBP" });
+  // OJO: solo PNG y JPEG — PDFKit (la librería que arma los PDF de
+  // recetas/certificados) NO sabe leer WEBP ni otros formatos. Si se
+  // guarda un logo en un formato no soportado, TODAS las recetas y
+  // certificados de la clínica fallan al generarse hasta que se
+  // reemplace el logo por uno válido.
+  const match = data_uri.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: "Solo se aceptan imágenes PNG o JPG (WEBP no es compatible con los PDF)" });
 
   const approxBytes = Math.ceil((match[2].length * 3) / 4);
   if (approxBytes > MAX_LOGO_BYTES) return res.status(400).json({ error: "La imagen es muy grande (máximo 2 MB)" });

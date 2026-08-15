@@ -46,9 +46,13 @@ function calcAge(birthDate) {
 // doctor_profile.logo_base64 a un Buffer que pdfkit pueda dibujar. Si no
 // hay logo o el formato no es válido, regresa null en vez de tronar —
 // así un logo mal guardado nunca rompe la generación del PDF.
+// PDFKit (la librería que arma el PDF) NO soporta WEBP, solo PNG/JPEG —
+// por eso el regex es más estricto de lo que acepta el <input type="file">
+// en algunos navegadores. Si el logo guardado no matchea, se ignora en vez
+// de romper la generación del documento.
 function parseLogoBuffer(dataUri) {
   if (!dataUri || typeof dataUri !== "string") return null;
-  const match = dataUri.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+  const match = dataUri.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
   if (!match) return null;
   try {
     return Buffer.from(match[2], "base64");
@@ -194,7 +198,14 @@ export function renderPrescriptionPdf({ rx, patient, items, qrBuffer, logoBuffer
   const textStartX = logoBuffer ? doc.x + 46 : doc.x;
   const headerTop = doc.y;
   if (logoBuffer) {
-    doc.image(logoBuffer, doc.x, headerTop, { width: 38, height: 38 });
+    // Última red de seguridad: si el logo guardado está corrupto o en un
+    // formato que PDFKit no puede decodificar, generamos el documento
+    // igual SIN el logo, en vez de que toda la receta falle.
+    try {
+      doc.image(logoBuffer, doc.x, headerTop, { width: 38, height: 38 });
+    } catch (err) {
+      console.error("[prescriptions] No se pudo dibujar el logo de la clínica (se omite):", err.message);
+    }
   }
   doc.font("Helvetica-Bold").fontSize(16).fillColor(BRAND_BROWN).text(rx.clinic_name || "Consultorio médico", textStartX, headerTop);
   doc.font("Helvetica").fontSize(10).fillColor("#555");
